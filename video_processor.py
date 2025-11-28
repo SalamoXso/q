@@ -1,4 +1,4 @@
-# video_processor.py (simplified)
+# video_processor.py (minimal version)
 import os
 import shutil
 
@@ -9,14 +9,10 @@ class VideoProcessor:
     
     def process_video(self, input_path):
         """
-        Simplified video processor - just copy the file
-        We'll add proper processing later
+        Minimal video processor - just validates file exists
+        We'll add proper processing after basic app works
         """
-        try:
-            # For now, just return the original path
-            # This avoids moviepy dependency issues
+        if os.path.exists(input_path):
             return input_path
-            
-        except Exception as e:
-            print(f"Video processing simplified: {e}")
-            return input_path
+        else:
+            raise FileNotFoundError(f"Video file not found: {input_path}")
