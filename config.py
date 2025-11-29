@@ -8,7 +8,7 @@ class Config:
     CLIENT_KEY = os.getenv('TIKTOK_CLIENT_KEY')
     CLIENT_SECRET = os.getenv('TIKTOK_CLIENT_SECRET')
     
-    # Use Render URL since localhost is not supported
+    # Use Render URL - this is CRITICAL
     REDIRECT_URI = 'https://q-hszm.onrender.com/callback'
     
     @classmethod
