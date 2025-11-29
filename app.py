@@ -463,7 +463,67 @@ def test_minimal_scopes():
     
     return html
 
-      
+@app.route('/manual-token-setup')
+def manual_token_setup():
+    """Manual token setup when OAuth is completely broken"""
+    return """
+    <html>
+    <head>
+        <title>Manual Token Setup</title>
+        <style>
+            body { font-family: Arial; margin: 40px; }
+            .card { background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0; }
+        </style>
+    </head>
+    <body>
+        <h1>🔧 Manual Token Setup</h1>
+        
+        <div class="card">
+            <h3>When OAuth is Broken</h3>
+            <p>Since TikTok's OAuth page has JavaScript issues, you can manually set up tokens:</p>
+            
+            <h4>Option 1: Use TikTok's Testing Tools</h4>
+            <ol>
+                <li>Go to <a href="https://developers.tiktok.com/tools/test/oauth/" target="_blank">TikTok OAuth Tester</a></li>
+                <li>Use your Client Key</li>
+                <li>Set redirect_uri to: <code>http://127.0.0.1:5000/callback</code></li>
+                <li>Get the authorization code</li>
+                <li>Paste it below</li>
+            </ol>
+            
+            <h4>Option 2: Manual Token Entry</h4>
+            <form action="/set-manual-token" method="post">
+                <p><strong>Access Token:</strong></p>
+                <input type="text" name="access_token" style="width: 100%; padding: 10px; margin: 10px 0;" placeholder="Paste access token here">
+                <button type="submit" style="padding: 10px 20px; background: #28a745; color: white; border: none; border-radius: 5px;">
+                    Set Manual Token
+                </button>
+            </form>
+        </div>
+        
+        <p><a href="/">← Back to Main Dashboard</a></p>
+    </body>
+    </html>
+    """
+
+@app.route('/set-manual-token', methods=['POST'])
+def set_manual_token():
+    """Set manually obtained token"""
+    access_token = request.form.get('access_token')
+    if access_token:
+        session['access_token'] = access_token
+        return """
+        <html>
+        <body style="font-family: Arial; margin: 40px;">
+            <h1 style="color: green;">✅ Manual Token Set Successfully</h1>
+            <p>Your access token has been stored in the session.</p>
+            <p><a href="/status">Check API Status</a> | <a href="/">Main Dashboard</a></p>
+        </body>
+        </html>
+        """
+    else:
+        return "No token provided"
+          
 @app.route('/tiktok-check')
 def tiktok_sandbox_check():
     """Comprehensive TikTok sandbox requirements check"""
