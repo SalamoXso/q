@@ -138,6 +138,174 @@ def auth_debug():
         return jsonify({"error": str(e)})
       
       
+
+@app.route('/deep-diagnostic')
+def deep_diagnostic():
+    """Deep diagnostic of TikTok sandbox configuration"""
+    
+    # Check all possible redirect URI combinations
+    base_uris = [
+        'http://127.0.0.1:5000',
+        'http://localhost:5000', 
+        'http://127.0.0.1',
+        'http://localhost'
+    ]
+    
+    paths = ['/callback', '/', '']
+    
+    test_cases = []
+    for base in base_uris:
+        for path in paths:
+            test_uri = base + path
+            test_cases.append(test_uri)
+    
+    diagnostic = {
+        "current_config": {
+            "client_key": Config.CLIENT_KEY,
+            "client_key_length": len(Config.CLIENT_KEY),
+            "redirect_uri": Config.REDIRECT_URI,
+            "environment": "Sandbox"
+        },
+        "test_cases": [],
+        "common_sandbox_issues": [
+            "Make sure 'http://127.0.0.1:5000/callback' is EXACTLY set in TikTok Portal",
+            "Ensure both 'Web' and 'Desktop' are checked for the redirect URI",
+            "Verify test account 'thereisonly1godallah1' is in Target Users",
+            "Click 'Apply Changes' after any modification",
+            "Wait 5-10 minutes for changes to propagate"
+        ]
+    }
+    
+    for test_uri in test_cases:
+        auth_url = (
+            f"https://www.tiktok.com/v2/auth/authorize/"
+            f"?client_key={Config.CLIENT_KEY}"
+            "&scope=user.info.basic"
+            "&response_type=code"
+            f"&redirect_uri={test_uri}"
+        )
+        
+        diagnostic["test_cases"].append({
+            "redirect_uri": test_uri,
+            "auth_url_length": len(auth_url),
+            "test_link": auth_url
+        })
+    
+    # Create HTML response
+    html = """
+    <html>
+        <head>
+            <title>TikTok Sandbox Deep Diagnostic</title>
+            <style>
+                body { font-family: Arial, sans-serif; margin: 40px; }
+                .test-case { border: 1px solid #ddd; padding: 15px; margin: 10px 0; }
+                .warning { background: #fff3cd; padding: 15px; border-radius: 5px; }
+                .success { background: #d4edda; padding: 15px; border-radius: 5px; }
+            </style>
+        </head>
+        <body>
+            <h1>🔍 TikTok Sandbox Deep Diagnostic</h1>
+            
+            <div class="warning">
+                <h3>⚠️ Current Status: Authentication Failing</h3>
+                <p>Even with correct redirect_uri format, TikTok is rejecting the request.</p>
+            </div>
+            
+            <h2>Current Configuration</h2>
+            <ul>
+                <li><strong>Client Key:</strong> {client_key}</li>
+                <li><strong>Redirect URI:</strong> {redirect_uri}</li>
+                <li><strong>Environment:</strong> {environment}</li>
+            </ul>
+            
+            <h2>🧪 Test All Possible Redirect URI Formats</h2>
+            <p>Click each link to test different redirect URI formats:</p>
+    """.format(
+        client_key=diagnostic["current_config"]["client_key"],
+        redirect_uri=diagnostic["current_config"]["redirect_uri"], 
+        environment=diagnostic["current_config"]["environment"]
+    )
+    
+    for i, test_case in enumerate(diagnostic["test_cases"]):
+        html += f"""
+        <div class="test-case">
+            <h3>Test Case #{i+1}</h3>
+            <p><strong>Redirect URI:</strong> {test_case['redirect_uri']}</p>
+            <a href="{test_case['test_link']}" target="_blank">🔗 Test This URI</a>
+        </div>
+        """
+    
+    html += """
+            <h2>🔧 Required Actions in TikTok Developer Portal</h2>
+            <ol>
+                <li>Go to <a href="https://developers.tiktok.com/" target="_blank">TikTok Developer Portal</a></li>
+                <li>Open your "Quran" app</li>
+                <li>Go to "Products" → "Login Kit"</li>
+                <li>In "Redirect URI" section, make sure you have EXACTLY: <code>http://127.0.0.1:5000/callback</code></li>
+                <li>Check both "Web" and "Desktop" checkboxes</li>
+                <li>Scroll down and click "Apply Changes"</li>
+                <li>Wait 5-10 minutes</li>
+                <li>Come back and test the links above</li>
+            </ol>
+            
+            <h2>🎯 Quick Test Links</h2>
+            <p>Try these specific test cases first:</p>
+            <ul>
+                <li><a href="/test-simple">Simple test (no PKCE)</a></li>
+                <li><a href="/test-no-scope">Test without scopes</a></li>
+                <li><a href="/test-different-ports">Test different ports</a></li>
+            </ul>
+        </body>
+    </html>
+    """
+    
+    return html
+
+@app.route('/test-simple')
+def test_simple():
+    """Test with absolute minimum parameters"""
+    auth_url = (
+        f"https://www.tiktok.com/v2/auth/authorize/"
+        f"?client_key={Config.CLIENT_KEY}"
+        "&response_type=code"
+        f"&redirect_uri=http://127.0.0.1:5000/callback"
+    )
+    return redirect(auth_url)
+
+@app.route('/test-no-scope') 
+def test_no_scope():
+    """Test without any scopes"""
+    auth_url = (
+        f"https://www.tiktok.com/v2/auth/authorize/"
+        f"?client_key={Config.CLIENT_KEY}"
+        "&response_type=code"
+        f"&redirect_uri=http://127.0.0.1:5000/callback"
+        "&scope=user.info.basic"  # Only basic scope
+    )
+    return redirect(auth_url)
+
+@app.route('/test-different-ports')
+def test_different_ports():
+    """Test different port configurations"""
+    ports = ['5000', '8080', '3000', '']
+    
+    html = "<h1>Test Different Ports</h1>"
+    for port in ports:
+        redirect_uri = f"http://127.0.0.1:{port}/callback" if port else "http://127.0.0.1/callback"
+        auth_url = (
+            f"https://www.tiktok.com/v2/auth/authorize/"
+            f"?client_key={Config.CLIENT_KEY}"
+            "&response_type=code"
+            f"&redirect_uri={redirect_uri}"
+        )
+        html += f"""
+        <div style="border: 1px solid #ccc; padding: 15px; margin: 10px;">
+            <h3>Port: {port if port else 'None'}</h3>
+            <p><strong>Redirect URI:</strong> {redirect_uri}</p>
+            <a href="{auth_url}">Test This Configuration</a>
+        </div>
+        """
+    return html
       
 @app.route('/tiktok-check')
 def tiktok_sandbox_check():
