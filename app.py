@@ -214,7 +214,17 @@ def authenticate():
             </body>
         </html>
         """
-
+# Add this to your app.py to verify production setup
+@app.route('/production-check')
+def production_check():
+    """Verify production configuration"""
+    return jsonify({
+        'environment': 'Production' if IS_RENDER else 'Development',
+        'redirect_uri': Config.REDIRECT_URI,
+        'client_key_set': bool(Config.CLIENT_KEY),
+        'expected_domain': 'q-hszm.onrender.com',
+        'current_domain_match': 'q-hszm.onrender.com' in Config.REDIRECT_URI
+    })
 @app.route('/callback')
 def callback():
     """Handle TikTok OAuth callback"""
@@ -306,7 +316,10 @@ def sdk_auth():
     <html>
     <head>
         <title>TikTok SDK Authentication</title>
-        <script src="https://js-sdk.tiktok.com/platform.js"></script>
+        <!-- Try different SDK URLs -->
+        <script src="https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/sdk.js"></script>
+        <!-- Fallback SDK URL -->
+        <script src="https://js16.tiktokcdn.com/byte/webview-ttnet/sdk.js"></script>
     </head>
     <body style="font-family: Arial; margin: 40px;">
         <h1>🔄 TikTok SDK Authentication</h1>
@@ -321,75 +334,338 @@ def sdk_auth():
         <div id="status" style="padding: 15px; border-radius: 5px; display: none;"></div>
 
         <script>
+            // Wait for SDK to load
+            function waitForSDK(callback, maxAttempts = 10) {
+                let attempts = 0;
+                const checkSDK = setInterval(() => {
+                    attempts++;
+                    if (typeof window.tt !== 'undefined') {
+                        clearInterval(checkSDK);
+                        callback(true);
+                    } else if (attempts >= maxAttempts) {
+                        clearInterval(checkSDK);
+                        callback(false);
+                    }
+                }, 500);
+            }
+
             // Initialize TikTok SDK
             function authenticateWithSDK() {
                 const status = document.getElementById('status');
                 status.style.display = 'block';
-                status.innerHTML = '<p>🔄 Initializing TikTok SDK...</p>';
+                status.innerHTML = '<p>🔄 Checking TikTok SDK...</p>';
                 
-                // TikTok SDK authentication
-                window.tt.login({
-                    scope: 'user.info.basic',
-                    redirectUri: 'http://127.0.0.1:5000/sdk-callback',
-                    state: 'quran-app-state'
-                }, function(response) {
-                    console.log('SDK Response:', response);
-                    
-                    if (response.authCode) {
-                        status.innerHTML = '<p style="color: green;">✅ SDK Authentication Successful!</p>';
-                        status.innerHTML += '<p>Auth Code: ' + response.authCode + '</p>';
-                        
-                        // Send the auth code to our backend
-                        fetch('/exchange-sdk-token', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                            },
-                            body: JSON.stringify({
-                                authCode: response.authCode
-                            })
-                        })
-                        .then(response => response.json())
-                        .then(data => {
-                            if (data.access_token) {
-                                status.innerHTML += '<p style="color: green;">✅ Token Exchange Successful!</p>';
-                                status.innerHTML += '<p>Access Token: ' + data.access_token.substring(0, 50) + '...</p>';
-                                status.innerHTML += '<p><a href="/">Go to Dashboard</a></p>';
-                            } else {
-                                status.innerHTML += '<p style="color: red;">❌ Token Exchange Failed: ' + JSON.stringify(data) + '</p>';
-                            }
-                        });
-                    } else {
-                        status.innerHTML = '<p style="color: red;">❌ SDK Authentication Failed: ' + JSON.stringify(response) + '</p>';
+                waitForSDK(function(sdkLoaded) {
+                    if (!sdkLoaded) {
+                        status.innerHTML = '<p style="color: red;">❌ TikTok SDK failed to load. Try alternative methods below.</p>';
+                        return;
                     }
+                    
+                    status.innerHTML = '<p>🔄 Initializing TikTok SDK...</p>';
+                    
+                    // TikTok SDK authentication
+                    window.tt.login({
+                        scope: 'user.info.basic',
+                        redirectUri: 'http://127.0.0.1:5000/sdk-callback',
+                        state: 'quran-app-state'
+                    }, function(response) {
+                        console.log('SDK Response:', response);
+                        
+                        if (response.authCode) {
+                            status.innerHTML = '<p style="color: green;">✅ SDK Authentication Successful!</p>';
+                            status.innerHTML += '<p>Auth Code: ' + response.authCode + '</p>';
+                            
+                            // Send the auth code to our backend
+                            fetch('/exchange-sdk-token', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                },
+                                body: JSON.stringify({
+                                    authCode: response.authCode
+                                })
+                            })
+                            .then(response => response.json())
+                            .then(data => {
+                                if (data.access_token) {
+                                    status.innerHTML += '<p style="color: green;">✅ Token Exchange Successful!</p>';
+                                    status.innerHTML += '<p>Access Token: ' + data.access_token.substring(0, 50) + '...</p>';
+                                    status.innerHTML += '<p><a href="/">Go to Dashboard</a></p>';
+                                } else {
+                                    status.innerHTML += '<p style="color: red;">❌ Token Exchange Failed: ' + JSON.stringify(data) + '</p>';
+                                }
+                            });
+                        } else {
+                            status.innerHTML = '<p style="color: red;">❌ SDK Authentication Failed: ' + JSON.stringify(response) + '</p>';
+                        }
+                    });
                 });
             }
             
-            // Check if SDK loaded
+            // Check if SDK loaded on page load
             document.addEventListener('DOMContentLoaded', function() {
                 const status = document.getElementById('status');
-                if (typeof window.tt !== 'undefined') {
-                    status.innerHTML = '<p style="color: green;">✅ TikTok SDK Loaded Successfully</p>';
-                } else {
-                    status.innerHTML = '<p style="color: red;">❌ TikTok SDK Failed to Load</p>';
-                }
+                waitForSDK(function(sdkLoaded) {
+                    if (sdkLoaded) {
+                        status.innerHTML = '<p style="color: green;">✅ TikTok SDK Loaded Successfully</p>';
+                    } else {
+                        status.innerHTML = '<p style="color: orange;">⚠️ TikTok SDK may not load. Try alternative methods.</p>';
+                    }
+                });
             });
         </script>
         
         <div style="margin-top: 30px; padding: 15px; background: #f8f9fa; border-radius: 5px;">
-            <h3>Why SDK Approach?</h3>
-            <p>TikTok's OAuth page has JavaScript compatibility issues that break the redirect flow. The SDK approach:</p>
+            <h3>🎯 If SDK Fails, Try These Alternatives:</h3>
             <ul>
-                <li>✅ Uses TikTok's official JavaScript</li>
-                <li>✅ Avoids broken OAuth page</li>
-                <li>✅ Handles authentication in background</li>
-                <li>✅ Better error handling</li>
+                <li><a href="/mobile-simulated-auth">📱 Mobile-Simulated Auth</a> (Most reliable)</li>
+                <li><a href="/direct-auth-test">🔗 Direct Auth Test</a></li>
+                <li><a href="/manual-token-setup">🔧 Manual Token Setup</a></li>
             </ul>
         </div>
     </body>
     </html>
     """
-
+@app.route('/direct-auth-test')
+def direct_auth_test():
+    """Direct authentication test with multiple options"""
+    auth_urls = {
+        "basic": (
+            f"https://www.tiktok.com/v2/auth/authorize/"
+            f"?client_key={Config.CLIENT_KEY}"
+            "&scope=user.info.basic"
+            "&response_type=code"
+            f"&redirect_uri={Config.REDIRECT_URI}"
+        ),
+        "no_scope": (
+            f"https://www.tiktok.com/v2/auth/authorize/"
+            f"?client_key={Config.CLIENT_KEY}"
+            "&response_type=code"
+            f"&redirect_uri={Config.REDIRECT_URI}"
+        ),
+        "minimal": (
+            f"https://www.tiktok.com/v2/auth/authorize/"
+            f"?client_key={Config.CLIENT_KEY}"
+            "&response_type=code"
+            f"&redirect_uri={Config.REDIRECT_URI}"
+            "&scope=user.info.basic"
+        )
+    }
+    
+    html = """
+    <html>
+    <head>
+        <title>Direct Auth Test</title>
+        <style>
+            body { font-family: Arial; margin: 40px; }
+            .test-case { border: 1px solid #ddd; padding: 20px; margin: 15px 0; border-radius: 8px; }
+            .btn { padding: 12px 24px; background: #FF0050; color: white; text-decoration: none; border-radius: 6px; display: inline-block; margin: 5px; }
+        </style>
+    </head>
+    <body>
+        <h1>🔗 Direct Authentication Tests</h1>
+        <p>Try these different authentication configurations:</p>
+    """
+    
+    for name, url in auth_urls.items():
+        html += f"""
+        <div class="test-case">
+            <h3>Test: {name.replace('_', ' ').title()}</h3>
+            <a href="{url}" class="btn" target="_blank">Test This Config</a>
+            <details style="margin-top: 10px;">
+                <summary>Show URL</summary>
+                <code style="word-break: break-all; font-size: 12px;">{url}</code>
+            </details>
+        </div>
+        """
+    
+    html += """
+        <div style="background: #e7f3ff; padding: 20px; border-radius: 8px; margin-top: 20px;">
+            <h3>💡 Pro Tip:</h3>
+            <p>Open links in <strong>Incognito Mode</strong> to avoid extension conflicts.</p>
+            <p>Right-click → "Open in new incognito window"</p>
+        </div>
+    </body>
+    </html>
+    """
+    
+    return html
+@app.route('/minimal-auth')
+def minimal_auth():
+    """Minimal authentication without PKCE - just basic parameters"""
+    auth_url = (
+        f"https://www.tiktok.com/v2/auth/authorize/"
+        f"?client_key={Config.CLIENT_KEY}"
+        "&response_type=code"
+        f"&redirect_uri={Config.REDIRECT_URI}"
+        # No scope, no PKCE - absolute minimum
+    )
+    
+    return f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Minimal TikTok Auth</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body style="font-family: Arial; margin: 40px;">
+        <h1>🧪 Minimal Authentication Test</h1>
+        <p>Testing with absolute minimum parameters (no PKCE, no scopes)</p>
+        
+        <div style="background: #e7f3ff; padding: 20px; border-radius: 8px; margin: 20px 0;">
+            <h3>🔧 Parameters Used:</h3>
+            <ul>
+                <li><strong>client_key:</strong> {Config.CLIENT_KEY[:10]}...</li>
+                <li><strong>response_type:</strong> code</li>
+                <li><strong>redirect_uri:</strong> {Config.REDIRECT_URI}</li>
+                <li><strong>scope:</strong> None</li>
+                <li><strong>PKCE:</strong> Disabled</li>
+            </ul>
+        </div>
+        
+        <a href="{auth_url}" style="padding: 15px 30px; background: #28a745; color: white; text-decoration: none; border-radius: 8px; font-size: 18px; display: inline-block;">
+            🚀 Test Minimal Authentication
+        </a>
+        
+        <div style="margin-top: 30px;">
+            <h3>Other Test Options:</h3>
+            <a href="/test-all-methods" style="color: #007bff;">View All Test Methods</a>
+        </div>
+    </body>
+    </html>
+    """
+@app.route('/test-all-methods')
+def test_all_methods():
+    """Test all possible authentication configurations"""
+    
+    test_cases = [
+        {
+            "name": "Minimal (No PKCE, No Scope)",
+            "url": f"https://www.tiktok.com/v2/auth/authorize/?client_key={Config.CLIENT_KEY}&response_type=code&redirect_uri={Config.REDIRECT_URI}",
+            "description": "Absolute minimum parameters"
+        },
+        {
+            "name": "Basic Scope Only", 
+            "url": f"https://www.tiktok.com/v2/auth/authorize/?client_key={Config.CLIENT_KEY}&response_type=code&redirect_uri={Config.REDIRECT_URI}&scope=user.info.basic",
+            "description": "Basic scope without PKCE"
+        },
+        {
+            "name": "With Simple PKCE",
+            "url": f"https://www.tiktok.com/v2/auth/authorize/?client_key={Config.CLIENT_KEY}&response_type=code&redirect_uri={Config.REDIRECT_URI}&scope=user.info.basic&code_challenge=simple_test&code_challenge_method=plain",
+            "description": "Simple PKCE without complex encoding"
+        },
+        {
+            "name": "Different Redirect (No Port)",
+            "url": f"https://www.tiktok.com/v2/auth/authorize/?client_key={Config.CLIENT_KEY}&response_type=code&redirect_uri=http://127.0.0.1/callback&scope=user.info.basic",
+            "description": "Redirect without port 5000"
+        },
+        {
+            "name": "Localhost Redirect",
+            "url": f"https://www.tiktok.com/v2/auth/authorize/?client_key={Config.CLIENT_KEY}&response_type=code&redirect_uri=http://localhost:5000/callback&scope=user.info.basic", 
+            "description": "Using localhost instead of 127.0.0.1"
+        }
+    ]
+    
+    html = f"""
+    <html>
+    <head>
+        <title>Comprehensive TikTok Auth Tests</title>
+        <style>
+            body {{ font-family: Arial; margin: 40px; }}
+            .test-case {{ border: 1px solid #ddd; padding: 20px; margin: 15px 0; border-radius: 8px; }}
+            .btn {{ padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 5px; display: inline-block; margin: 5px; }}
+            .btn-success {{ background: #28a745; }}
+            .btn-warning {{ background: #ffc107; color: black; }}
+            .status {{ padding: 10px; border-radius: 5px; margin: 10px 0; }}
+            .status-info {{ background: #d1ecf1; color: #0c5460; }}
+        </style>
+    </head>
+    <body>
+        <h1>🧪 Comprehensive Authentication Tests</h1>
+        
+        <div class="status status-info">
+            <h3>🔍 Debug Information</h3>
+            <p><strong>Current Config:</strong> {Config.REDIRECT_URI}</p>
+            <p><strong>Last Error:</strong> code_challenge validation</p>
+            <p><strong>Strategy:</strong> Testing different parameter combinations to find what works</p>
+        </div>
+    """
+    
+    for i, test in enumerate(test_cases):
+        html += f"""
+        <div class="test-case">
+            <h3>Test #{i+1}: {test['name']}</h3>
+            <p>{test['description']}</p>
+            <a href="{test['url']}" class="btn {'btn-success' if i == 0 else 'btn-warning'}" target="_blank">
+                🚀 Test This Configuration
+            </a>
+            <details style="margin-top: 10px;">
+                <summary>Show URL Details</summary>
+                <code style="word-break: break-all; font-size: 11px; display: block; background: #f8f9fa; padding: 10px; margin-top: 5px;">
+                    {test['url']}
+                </code>
+            </details>
+        </div>
+        """
+    
+    html += """
+        <div style="background: #fff3cd; padding: 20px; border-radius: 8px; margin-top: 20px;">
+            <h3>💡 Testing Instructions:</h3>
+            <ol>
+                <li>Start with <strong>Test #1 (Minimal)</strong> - it has the best chance of working</li>
+                <li>If it fails, note the exact error message</li>
+                <li>Try the other tests one by one</li>
+                <li>Use <strong>Incognito Mode</strong> for each test</li>
+                <li>Report which test (if any) works</li>
+            </ol>
+        </div>
+    </body>
+    </html>
+    """
+    
+    return html
+@app.route('/exchange-simple-token', methods=['POST'])
+def exchange_simple_token():
+    """Exchange auth code for token without PKCE verification"""
+    try:
+        data = request.json
+        auth_code = data.get('authCode')
+        
+        if not auth_code:
+            return jsonify({'error': 'No auth code provided'})
+        
+        # Exchange without PKCE (for testing)
+        token_url = "https://open.tiktokapis.com/v2/oauth/token/"
+        payload = {
+            'client_key': Config.CLIENT_KEY,
+            'client_secret': Config.CLIENT_SECRET,
+            'code': auth_code,
+            'grant_type': 'authorization_code',
+            'redirect_uri': Config.REDIRECT_URI
+            # No code_verifier for non-PKCE flow
+        }
+        
+        response = requests.post(token_url, data=payload)
+        token_data = response.json()
+        
+        print(f"🔧 Token exchange response: {token_data}")
+        
+        if 'access_token' in token_data:
+            session['access_token'] = token_data['access_token']
+            return jsonify({
+                'success': True,
+                'access_token': token_data['access_token'],
+                'message': 'Authentication successful!'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': token_data,
+                'message': 'Token exchange failed'
+            })
+            
+    except Exception as e:
+        return jsonify({'error': str(e)})    
 @app.route('/exchange-sdk-token', methods=['POST'])
 def exchange_sdk_token():
     """Exchange SDK auth code for access token"""
@@ -435,7 +711,91 @@ def sdk_callback():
     </body>
     </html>
     """
-
+@app.route('/mobile-simulated-auth')
+def mobile_simulated_auth():
+    """Mobile-simulated authentication that bypasses desktop JS issues"""
+    auth_url = (
+        f"https://www.tiktok.com/v2/auth/authorize/"
+        f"?client_key={Config.CLIENT_KEY}"
+        "&scope=user.info.basic"
+        "&response_type=code"
+        f"&redirect_uri={Config.REDIRECT_URI}"
+    )
+    
+    return f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Mobile-Simulated TikTok Auth</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+        <script>
+            // Force mobile environment
+            function forceMobileEnvironment() {{
+                // Override user agent
+                Object.defineProperty(navigator, 'userAgent', {{
+                    get: function() {{
+                        return 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1';
+                    }}
+                }});
+                
+                // Force mobile viewport
+                const viewport = document.querySelector('meta[name="viewport"]');
+                viewport.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no');
+                
+                // Add mobile CSS
+                const style = document.createElement('style');
+                style.textContent = `
+                    body {{
+                        -webkit-text-size-adjust: 100%;
+                        touch-action: manipulation;
+                    }}
+                `;
+                document.head.appendChild(style);
+            }}
+            
+            // Initialize mobile environment and redirect
+            document.addEventListener('DOMContentLoaded', function() {{
+                forceMobileEnvironment();
+                
+                // Show status
+                const status = document.getElementById('status');
+                status.innerHTML = '<p>📱 Simulating mobile environment...</p>';
+                
+                // Wait a moment then redirect
+                setTimeout(function() {{
+                    status.innerHTML = '<p>🔄 Redirecting to TikTok mobile auth...</p>';
+                    window.location.href = "{auth_url}";
+                }}, 1000);
+            }});
+        </script>
+        <style>
+            body {{
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                margin: 20px;
+                background: #f5f5f5;
+            }}
+            .mobile-container {{
+                max-width: 400px;
+                margin: 0 auto;
+                background: white;
+                border-radius: 12px;
+                padding: 20px;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="mobile-container">
+            <h2 style="text-align: center; color: #FF0050;">📱 Mobile Authentication</h2>
+            <p style="text-align: center;">Simulating mobile environment to avoid desktop JS issues...</p>
+            <div id="status" style="text-align: center; padding: 20px;"></div>
+            <p style="text-align: center; font-size: 14px; color: #666;">
+                If not redirected automatically, <a href="{auth_url}">click here</a>.
+            </p>
+        </div>
+    </body>
+    </html>
+    """
 @app.route('/mobile-forced-auth')
 def mobile_forced_auth():
     """Force mobile user agent to avoid desktop JS issues"""

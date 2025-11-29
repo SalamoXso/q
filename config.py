@@ -8,13 +8,8 @@ class Config:
     CLIENT_KEY = os.getenv('TIKTOK_CLIENT_KEY')
     CLIENT_SECRET = os.getenv('TIKTOK_CLIENT_SECRET')
     
-    # Try different formats - TikTok Sandbox can be picky
-    REDIRECT_URI = 'http://127.0.0.1:5000/callback'  # Try IP instead of localhost
-    
-    # Alternative formats to try:
-    # REDIRECT_URI = 'http://localhost:5000/callback'
-    # REDIRECT_URI = 'http://localhost/callback'  # Without port
-    # REDIRECT_URI = 'http://127.0.0.1/callback'  # Without port
+    # Use Render URL since localhost is not supported
+    REDIRECT_URI = 'https://q-hszm.onrender.com/callback'
     
     @classmethod
     def validate_config(cls):
@@ -26,3 +21,11 @@ class Config:
         
         if missing:
             raise Exception(f"Missing environment variables: {', '.join(missing)}")
+
+# Validate configuration
+try:
+    Config.validate_config()
+    print("✅ Configuration validated successfully")
+    print(f"🔧 Redirect URI: {Config.REDIRECT_URI}")
+except Exception as e:
+    print(f"❌ Configuration error: {e}")
