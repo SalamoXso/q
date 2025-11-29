@@ -306,6 +306,163 @@ def test_different_ports():
         </div>
         """
     return html
+
+
+@app.route('/browser-compatible-auth')
+def browser_compatible_auth():
+    """OAuth flow optimized for browser compatibility issues"""
+    
+    # Generate PKCE
+    code_verifier = generate_code_verifier()
+    code_challenge = generate_code_challenge(code_verifier)
+    session['code_verifier'] = code_verifier
+    
+    auth_url = (
+        f"https://www.tiktok.com/v2/auth/authorize/"
+        f"?client_key={Config.CLIENT_KEY}"
+        "&scope=user.info.basic"  # Reduced scope to minimize issues
+        "&response_type=code"
+        f"&redirect_uri={Config.REDIRECT_URI}"
+        f"&code_challenge={code_challenge}"
+        "&code_challenge_method=S256"
+    )
+    
+    return f"""
+    <html>
+        <head>
+            <title>Browser-Compatible TikTok Auth</title>
+            <style>
+                body {{ font-family: Arial, sans-serif; margin: 40px; }}
+                .warning {{ background: #fff3cd; padding: 20px; border-radius: 8px; margin: 20px 0; }}
+                .steps {{ background: #e9ecef; padding: 20px; border-radius: 8px; }}
+            </style>
+        </head>
+        <body>
+            <h1>🔄 Browser-Optimized TikTok Authentication</h1>
+            
+            <div class="warning">
+                <h3>⚠️ Browser Compatibility Detected</h3>
+                <p>TikTok's OAuth page has JavaScript compatibility issues. Follow these steps:</p>
+            </div>
+            
+            <div class="steps">
+                <h3>🎯 Recommended Steps:</h3>
+                <ol>
+                    <li><strong>Use Incognito/Private Mode</strong> to avoid extension conflicts</li>
+                    <li><strong>Disable ad blockers</strong> for TikTok domains</li>
+                    <li><strong>Allow pop-ups</strong> for TikTok.com</li>
+                    <li>If errors persist, try a different browser</li>
+                </ol>
+            </div>
+            
+            <h2>🔗 Authentication Link:</h2>
+            <a href="{auth_url}" style="font-size: 18px; padding: 15px; background: #FF0050; color: white; text-decoration: none; border-radius: 8px; display: inline-block;">
+                🚀 Launch TikTok OAuth (Optimized)
+            </a>
+            
+            <div style="margin-top: 30px;">
+                <h3>Alternative Approaches:</h3>
+                <ul>
+                    <li><a href="/mobile-simulation">📱 Mobile Simulation</a></li>
+                    <li><a href="/direct-auth-link">🔗 Direct Auth Link</a></li>
+                    <li><a href="/test-minimal-scopes">🧪 Minimal Scope Test</a></li>
+                </ul>
+            </div>
+        </body>
+    </html>
+    """
+
+@app.route('/mobile-simulation')
+def mobile_simulation():
+    """Simulate mobile browser to avoid desktop JS issues"""
+    auth_url = (
+        f"https://www.tiktok.com/v2/auth/authorize/"
+        f"?client_key={Config.CLIENT_KEY}"
+        "&scope=user.info.basic"
+        "&response_type=code"
+        f"&redirect_uri={Config.REDIRECT_URI}"
+    )
+    
+    return f"""
+    <html>
+        <head>
+            <title>Mobile Simulation</title>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        </head>
+        <body>
+            <h2>📱 Mobile Simulation</h2>
+            <p>This page simulates a mobile environment which may avoid desktop JS issues.</p>
+            <a href="{auth_url}">Open TikTok OAuth in Mobile Mode</a>
+            
+            <script>
+                // Force mobile user agent simulation
+                window.location.href = "{auth_url}";
+            </script>
+        </body>
+    </html>
+    """
+
+@app.route('/direct-auth-link')
+def direct_auth_link():
+    """Provide direct auth link for manual testing"""
+    auth_url = (
+        f"https://www.tiktok.com/v2/auth/authorize/"
+        f"?client_key={Config.CLIENT_KEY}"
+        "&scope=user.info.basic"
+        "&response_type=code"
+        f"&redirect_uri={Config.REDIRECT_URI}"
+    )
+    
+    return f"""
+    <html>
+        <body>
+            <h2>🔗 Direct Authentication Link</h2>
+            <p>Copy and paste this URL directly into a <strong>clean browser window</strong>:</p>
+            <textarea style="width: 100%; height: 100px; font-family: monospace; padding: 10px;" readonly>{auth_url}</textarea>
+            <p><strong>Instructions:</strong></p>
+            <ol>
+                <li>Open a <strong>new incognito/private window</strong></li>
+                <li>Copy the URL above</li>
+                <li>Paste it in the address bar and press Enter</li>
+                <li>This avoids any extension interference</li>
+            </ol>
+        </body>
+    </html>
+    """
+
+@app.route('/test-minimal-scopes')
+def test_minimal_scopes():
+    """Test with absolute minimum configuration"""
+    test_cases = [
+        {"scopes": "user.info.basic", "description": "Basic user info only"},
+        {"scopes": "", "description": "No scopes (just authentication)"},
+        {"scopes": "user.info.basic,video.list", "description": "Basic + video list (no upload)"},
+    ]
+    
+    html = "<h1>🧪 Minimal Scope Testing</h1>"
+    html += "<p>Testing with reduced scopes to minimize JavaScript complexity:</p>"
+    
+    for i, test_case in enumerate(test_cases):
+        auth_url = (
+            f"https://www.tiktok.com/v2/auth/authorize/"
+            f"?client_key={Config.CLIENT_KEY}"
+            f"&scope={test_case['scopes']}"
+            "&response_type=code"
+            f"&redirect_uri={Config.REDIRECT_URI}"
+        )
+        
+        html += f"""
+        <div style="border: 1px solid #ccc; padding: 20px; margin: 15px 0; border-radius: 8px;">
+            <h3>Test #{i+1}: {test_case['description']}</h3>
+            <p><strong>Scopes:</strong> {test_case['scopes'] or 'None'}</p>
+            <a href="{auth_url}" style="padding: 10px 20px; background: #28a745; color: white; text-decoration: none; border-radius: 5px;">
+                Test This Configuration
+            </a>
+        </div>
+        """
+    
+    return html
+
       
 @app.route('/tiktok-check')
 def tiktok_sandbox_check():
