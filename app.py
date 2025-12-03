@@ -318,7 +318,7 @@ def upload_video_page():
     
     # Check if we're in sandbox mode
     sandbox_warning = ""
-    if not IS_RENDER:  # Or check your specific sandbox condition
+    if not IS_RENDER:
         sandbox_warning = """
         <div style="background: #fff3cd; color: #856404; padding: 15px; border-radius: 8px; margin: 20px 0;">
             <h3>⚠️ Sandbox Mode</h3>
@@ -333,122 +333,338 @@ def upload_video_page():
         </div>
         """
     
+    # JavaScript code as a separate variable
+    javascript_code = """
+    <script>
+        // File size and type validation
+        document.getElementById('video').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            const resultDiv = document.getElementById('result');
+            
+            if (file) {
+                const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+                const maxSizeMB = 500;
+                
+                // Check file type
+                const allowedTypes = ['video/mp4', 'video/quicktime', 'video/x-msvideo'];
+                if (!allowedTypes.includes(file.type)) {
+                    resultDiv.innerHTML = `
+                        <div class="result-box error" style="display: block;">
+                            <h3>❌ Invalid File Type</h3>
+                            <p>Please select a video file (MP4, MOV, or AVI format).</p>
+                            <p>Selected file type: ${file.type || 'Unknown'}</p>
+                        </div>
+                    `;
+                    this.value = ''; // Clear the file input
+                    return;
+                }
+                
+                // Check file size
+                if (file.size > maxSizeMB * 1024 * 1024) {
+                    resultDiv.innerHTML = `
+                        <div class="result-box error" style="display: block;">
+                            <h3>❌ File Too Large</h3>
+                            <p>Maximum file size is ${maxSizeMB}MB.</p>
+                            <p>Your file: ${fileSizeMB}MB</p>
+                        </div>
+                    `;
+                    this.value = '';
+                    return;
+                }
+                
+                // Show file info
+                resultDiv.innerHTML = `
+                    <div class="result-box success" style="display: block;">
+                        <h3>✅ File Ready</h3>
+                        <p><strong>File:</strong> ${file.name}</p>
+                        <p><strong>Size:</strong> ${fileSizeMB} MB</p>
+                        <p><strong>Type:</strong> ${file.type.split('/')[1].toUpperCase()}</p>
+                    </div>
+                `;
+            }
+        });
+        
+        // Form submission
+        document.getElementById('uploadForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData();
+            const videoFile = document.getElementById('video').files[0];
+            const caption = document.getElementById('caption').value;
+            const privacy = document.getElementById('privacy').value;
+            const category = document.getElementById('category').value;
+            const allowDuet = document.getElementById('allow_duet').value;
+            const allowStitch = document.getElementById('allow_stitch').value;
+            
+            // UI elements
+            const progressBar = document.getElementById('progressBar');
+            const progressFill = document.getElementById('progressFill');
+            const resultDiv = document.getElementById('result');
+            const uploadButton = document.getElementById('uploadButton');
+            
+            if (!videoFile) {
+                resultDiv.innerHTML = `
+                    <div class="result-box error" style="display: block;">
+                        <h3>❌ No File Selected</h3>
+                        <p>Please select a video file to upload.</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            // Disable button and show progress
+            uploadButton.disabled = true;
+            uploadButton.innerHTML = '🔄 Uploading...';
+            progressBar.style.display = 'block';
+            resultDiv.innerHTML = `
+                <div class="result-box" style="display: block; background: #fff3cd; color: #856404;">
+                    <h3>🔄 Starting Upload...</h3>
+                    <p>Preparing to upload: ${videoFile.name}</p>
+                    <p>Size: ${(videoFile.size / (1024 * 1024)).toFixed(2)} MB</p>
+                </div>
+            `;
+            
+            // Update progress bar
+            let progress = 0;
+            const progressInterval = setInterval(() => {
+                if (progress < 90) {
+                    progress += 10;
+                    progressFill.style.width = progress + '%';
+                    progressFill.textContent = progress + '%';
+                }
+            }, 500);
+            
+            // Prepare form data
+            formData.append('video', videoFile);
+            formData.append('caption', caption);
+            formData.append('privacy_level', privacy);
+            formData.append('category', category);
+            formData.append('allow_duet', allowDuet);
+            formData.append('allow_stitch', allowStitch);
+            
+            try {
+                const response = await fetch('/api/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                clearInterval(progressInterval);
+                progressFill.style.width = '100%';
+                progressFill.textContent = '100%';
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    resultDiv.innerHTML = `
+                        <div class="result-box success" style="display: block;">
+                            <h3>✅ Upload Successful!</h3>
+                            <p><strong>🎉 Video uploaded to TikTok!</strong></p>
+                            ${data.video_id ? `<p><strong>Video ID:</strong> ${data.video_id}</p>` : ''}
+                            <p><strong>Status:</strong> ${data.status || 'Uploaded'}</p>
+                            <p><strong>Privacy:</strong> ${privacy}</p>
+                            <p>${data.message || 'Your video has been successfully uploaded.'}</p>
+                            <button onclick="location.reload()" style="margin-top: 15px; padding: 10px 20px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                                📤 Upload Another Video
+                            </button>
+                        </div>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `
+                        <div class="result-box error" style="display: block;">
+                            <h3>❌ Upload Failed</h3>
+                            <p><strong>Error:</strong> ${data.error || 'Unknown error'}</p>
+                            ${data.details ? `<p><strong>Details:</strong> ${JSON.stringify(data.details)}</p>` : ''}
+                            <button onclick="location.reload()" style="margin-top: 15px; padding: 10px 20px; background: #dc3545; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                                🔄 Try Again
+                            </button>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                clearInterval(progressInterval);
+                resultDiv.innerHTML = `
+                    <div class="result-box error" style="display: block;">
+                        <h3>❌ Upload Error</h3>
+                        <p><strong>Network Error:</strong> ${error.message}</p>
+                        <p>Please check your connection and try again.</p>
+                        <button onclick="location.reload()" style="margin-top: 15px; padding: 10px 20px; background: #dc3545; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                            🔄 Try Again
+                        </button>
+                    </div>
+                `;
+            } finally {
+                uploadButton.disabled = false;
+                uploadButton.innerHTML = '🚀 Upload to TikTok';
+            }
+        });
+    </script>
+    """
+    
     return f"""
     <!DOCTYPE html>
     <html>
     <head>
         <title>Upload Video to TikTok</title>
         <style>
-            body {{ font-family: Arial, sans-serif; margin: 40px; }}
-            .container {{ max-width: 600px; margin: 0 auto; }}
-            .card {{ background: #f9f9f9; padding: 25px; border-radius: 12px; margin: 20px 0; }}
-            /* ... rest of your CSS ... */
+            body {{ font-family: Arial, sans-serif; margin: 40px; background: #f5f5f5; }}
+            .container {{ max-width: 700px; margin: 0 auto; }}
+            .card {{ background: white; padding: 30px; border-radius: 15px; margin: 25px 0; box-shadow: 0 2px 15px rgba(0,0,0,0.1); }}
+            .form-group {{ margin: 20px 0; }}
+            label {{ display: block; margin-bottom: 8px; font-weight: bold; color: #333; }}
+            input[type="file"], textarea, select {{ 
+                width: 100%; 
+                padding: 12px; 
+                border: 2px solid #ddd; 
+                border-radius: 8px; 
+                font-size: 16px;
+                box-sizing: border-box;
+            }}
+            input[type="file"]:focus, textarea:focus, select:focus {{
+                border-color: #FF0050;
+                outline: none;
+                box-shadow: 0 0 0 3px rgba(255, 0, 80, 0.1);
+            }}
+            textarea {{ min-height: 100px; resize: vertical; }}
+            button {{ 
+                padding: 15px 40px; 
+                background: linear-gradient(135deg, #FF0050, #FF3366); 
+                color: white; 
+                border: none; 
+                border-radius: 10px; 
+                font-size: 18px; 
+                font-weight: bold;
+                cursor: pointer; 
+                width: 100%;
+                transition: transform 0.2s, box-shadow 0.2s;
+            }}
+            button:hover {{
+                transform: translateY(-2px);
+                box-shadow: 0 5px 15px rgba(255, 0, 80, 0.3);
+            }}
+            .progress {{ 
+                display: none; 
+                background: #e9ecef; 
+                border-radius: 10px; 
+                margin: 20px 0; 
+                overflow: hidden;
+                height: 25px;
+            }}
+            .progress-bar {{ 
+                background: linear-gradient(90deg, #28a745, #20c997); 
+                height: 100%; 
+                width: 0%; 
+                transition: width 0.5s;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                color: white;
+                font-weight: bold;
+            }}
+            .result-box {{ 
+                padding: 20px; 
+                border-radius: 10px; 
+                margin-top: 20px;
+                display: none;
+            }}
+            .success {{ background: #d4edda; color: #155724; border: 2px solid #c3e6cb; }}
+            .error {{ background: #f8d7da; color: #721c24; border: 2px solid #f5c6cb; }}
+            .info-box {{ background: #d1ecf1; color: #0c5460; padding: 15px; border-radius: 8px; margin: 15px 0; }}
         </style>
     </head>
     <body>
         <div class="container">
-            <h1>🎬 Upload Video to TikTok</h1>
+            <h1 style="color: #FF0050; text-align: center;">🎬 Upload Video to TikTok</h1>
+            <p style="text-align: center; color: #666;">Share your Quran videos directly from your server</p>
             
             {sandbox_warning}
             
             <div class="card">
-                <h2>Video Details</h2>
-                <!-- ... rest of your form ... -->
+                <h2 style="color: #333; margin-top: 0;">📤 Video Upload Form</h2>
+                
+                <form id="uploadForm" enctype="multipart/form-data">
+                    <div class="form-group">
+                        <label for="video">🎥 Select Video File:</label>
+                        <input type="file" id="video" name="video" accept="video/mp4,video/quicktime,video/x-msvideo" required>
+                        <div class="info-box">
+                            <strong>📋 Requirements:</strong>
+                            <ul style="margin: 5px 0; padding-left: 20px;">
+                                <li>Formats: MP4, MOV, AVI</li>
+                                <li>Maximum size: 500MB</li>
+                                <li>Recommended: Short videos (3-60 seconds)</li>
+                                <li>Vertical format (9:16) works best</li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="caption">📝 Caption:</label>
+                        <textarea id="caption" name="caption" rows="3" placeholder="Enter your video caption with hashtags... 
+    Example: Beautiful Quran recitation #Quran #Islam #Islamic #Allah #Muslim"></textarea>
+                        <small style="color: #666;">Tip: Use relevant hashtags like #Quran, #Islam, #Islamic, #Muslim</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                            <div>
+                                <label for="privacy">🔒 Privacy Setting:</label>
+                                <select id="privacy" name="privacy">
+                                    <option value="PUBLIC">🌎 Public</option>
+                                    <option value="FRIENDS">👥 Friends Only</option>
+                                    <option value="PRIVATE">🔐 Private</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="category">📁 Category:</label>
+                                <select id="category" name="category">
+                                    <option value="EDUCATION">📚 Education</option>
+                                    <option value="RELIGION">🕌 Religion</option>
+                                    <option value="MUSIC">🎵 Music</option>
+                                    <option value="OTHER">📦 Other</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                            <div>
+                                <label for="allow_duet">🎭 Allow Duet:</label>
+                                <select id="allow_duet" name="allow_duet">
+                                    <option value="true">✅ Yes</option>
+                                    <option value="false">❌ No</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="allow_stitch">🎬 Allow Stitch:</label>
+                                <select id="allow_stitch" name="allow_stitch">
+                                    <option value="true">✅ Yes</option>
+                                    <option value="false">❌ No</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <button type="submit" id="uploadButton">
+                        🚀 Upload to TikTok
+                    </button>
+                </form>
+                
+                <div class="progress" id="progressBar">
+                    <div class="progress-bar" id="progressFill">0%</div>
+                </div>
+                
+                <div id="result" class="result-box"></div>
+            </div>
+            
+            <div style="text-align: center; margin-top: 30px;">
+                <a href="/" style="color: #FF0050; text-decoration: none; font-weight: bold;">← Back to Dashboard</a>
+                <span style="margin: 0 10px;">•</span>
+                <a href="/status" style="color: #666; text-decoration: none;">📊 Check Status</a>
             </div>
         </div>
-    </body>
-    </html>
-    """
-@app.route('/production-check')
-def production_check():
-    """Verify production configuration"""
-    return jsonify({
-        'environment': 'Production' if IS_RENDER else 'Development',
-        'redirect_uri': Config.REDIRECT_URI,
-        'client_key_set': bool(Config.CLIENT_KEY),
-        'expected_domain': 'q-hszm.onrender.com',
-        'current_domain_match': 'q-hszm.onrender.com' in Config.REDIRECT_URI
-    })
-@app.route('/callback')
-def callback():
-    """Handle TikTok OAuth callback"""
-    auth_code = request.args.get('code')
-    error = request.args.get('error')
-    error_description = request.args.get('error_description')
-    
-    print(f"📥 Callback received - code: {auth_code}, error: {error}")
-    
-    if error:
-        error_msg = f"OAuth Error: {error}"
-        if error_description:
-            error_msg += f" - {error_description}"
-        print(f"❌ {error_msg}")
-        return f"""
-        <html>
-            <body style="font-family: Arial; margin: 40px;">
-                <h1>❌ OAuth Error</h1>
-                <div style="background: #f8d7da; color: #721c24; padding: 20px; border-radius: 8px;">
-                    <p><strong>Error:</strong> {error}</p>
-                    <p><strong>Description:</strong> {error_description}</p>
-                </div>
-                <p><a href="/">← Back to Home</a></p>
-            </body>
-        </html>
-        """
-    
-    if auth_code:
-        print(f"🔄 Exchanging authorization code: {auth_code}")
-        token_data = tiktok_api.exchange_code_for_token(auth_code)
         
-        if 'access_token' in token_data:
-            session['access_token'] = token_data['access_token']
-            session['refresh_token'] = token_data.get('refresh_token')
-            session['expires_in'] = token_data.get('expires_in')
-            
-            print(f"✅ Authentication successful! Access token: {token_data['access_token'][:50]}...")
-            
-            return f"""
-            <html>
-                <head>
-                    <title>Authentication Successful</title>
-                    <style>
-                        body {{ font-family: Arial; margin: 40px; }}
-                        .success {{ background: #d4edda; color: #155724; padding: 20px; border-radius: 8px; }}
-                    </style>
-                </head>
-                <body>
-                    <h1>✅ Authentication Successful!</h1>
-                    <div class="success">
-                        <p><strong>Access Token:</strong> {token_data['access_token'][:50]}...</p>
-                        <p><strong>Expires In:</strong> {token_data.get('expires_in', 'Unknown')} seconds</p>
-                        <p><strong>Scope:</strong> {token_data.get('scope', 'Unknown')}</p>
-                    </div>
-                    <p><a href="/">🏠 Go to Dashboard</a> | <a href="/status">📡 Check API Status</a></p>
-                </body>
-            </html>
-            """
-        else:
-            error_msg = f"Token exchange failed: {token_data}"
-            print(f"❌ {error_msg}")
-            return f"""
-            <html>
-                <body style="font-family: Arial; margin: 40px;">
-                    <h1>❌ Authentication Failed</h1>
-                    <div style="background: #f8d7da; color: #721c24; padding: 20px; border-radius: 8px;">
-                        <pre>{json.dumps(token_data, indent=2)}</pre>
-                    </div>
-                    <p><a href="/">← Try Again</a></p>
-                </body>
-            </html>
-            """
-    
-    return """
-    <html>
-        <body style="font-family: Arial; margin: 40px;">
-            <h1>❌ No Authorization Code</h1>
-            <p>No authorization code was received from TikTok.</p>
-            <p><a href="/">← Back to Home</a></p>
-        </body>
+        {javascript_code}
+    </body>
     </html>
     """
 
