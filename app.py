@@ -36,36 +36,65 @@ class TikTokAPI:
         self.client_secret = Config.CLIENT_SECRET
         self.redirect_uri = Config.REDIRECT_URI
         print(f"🔧 TikTok API Config - Client Key: {self.client_key[:10]}..., Redirect: {self.redirect_uri}")
-    def upload_video(self, access_token, video_path, caption="", privacy_level="PUBLIC", allow_duet=True, allow_stitch=True):
+    def upload_video(self, access_token, video_path, caption="", privacy_level="PUBLIC", category="EDUCATION", allow_duet=True, allow_stitch=True):
         """Upload video to TikTok"""
         try:
-            upload_url = "https://open.tiktokapis.com/v2/video/publish/"
+            # Try both possible endpoints
+            upload_urls = [
+                "https://open.tiktokapis.com/v2/video/publish/",
+                "https://open.tiktokapis.com/v2/video/upload/",
+                "https://business-api.tiktok.com/open_api/v1.3/video/upload/"
+            ]
             
             headers = {
                 'Authorization': f'Bearer {access_token}',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
             }
             
-            # Prepare video data
-            with open(video_path, 'rb') as video_file:
-                files = {
-                    'video': video_file
-                }
-                
-                data = {
-                    'caption': caption,
-                    'privacy_level': privacy_level,
-                    'allow_duet': 'true' if allow_duet else 'false',
-                    'allow_stitch': 'true' if allow_stitch else 'false'
-                }
-                
-                print(f"📤 Uploading video to TikTok...")
-                response = requests.post(upload_url, headers=headers, files=files, data=data)
-                
-                print(f"📥 Upload response status: {response.status_code}")
-                print(f"📥 Upload response: {response.text}")
-                
-                return response.json()
-                
+            for upload_url in upload_urls:
+                try:
+                    print(f"📤 Trying upload endpoint: {upload_url}")
+                    
+                    with open(video_path, 'rb') as video_file:
+                        files = {
+                            'video': (os.path.basename(video_path), video_file, 'video/mp4')
+                        }
+                        
+                        data = {
+                            'caption': caption,
+                            'privacy_level': privacy_level,
+                            'category': category,
+                            'allow_duet': 'true' if allow_duet else 'false',
+                            'allow_stitch': 'true' if allow_stitch else 'false'
+                        }
+                        
+                        print(f"📤 Uploading to {upload_url}...")
+                        response = requests.post(upload_url, headers=headers, files=files, data=data, timeout=30)
+                        
+                        print(f"📥 Response status: {response.status_code}")
+                        print(f"📥 Response headers: {dict(response.headers)}")
+                        print(f"📥 Response text (first 500 chars): {response.text[:500]}")
+                        
+                        # Try to parse as JSON
+                        try:
+                            result = response.json()
+                            print(f"✅ Parsed JSON response: {result}")
+                            return result
+                        except json.JSONDecodeError:
+                            # Not JSON, return raw response
+                            return {
+                                'status_code': response.status_code,
+                                'text': response.text,
+                                'headers': dict(response.headers),
+                                'error': 'Response not in JSON format'
+                            }
+                            
+                except Exception as e:
+                    print(f"❌ Failed with endpoint {upload_url}: {e}")
+                    continue
+            
+            return {'error': 'All upload endpoints failed'}
+                    
         except Exception as e:
             print(f"❌ Upload error: {e}")
             return {'error': str(e)}
@@ -246,15 +275,16 @@ def api_upload_video():
         video_file = request.files.get('video')
         caption = request.form.get('caption', '')
         privacy_level = request.form.get('privacy_level', 'PUBLIC')
+        category = request.form.get('category', 'EDUCATION')
         allow_duet = request.form.get('allow_duet', 'true') == 'true'
         allow_stitch = request.form.get('allow_stitch', 'true') == 'true'
         
         if not video_file:
             return jsonify({'success': False, 'error': 'No video file provided'})
         
-        # Validate file size (max 500MB)
-        if video_file.content_length > 500 * 1024 * 1024:
-            return jsonify({'success': False, 'error': 'File too large. Maximum size is 500MB'})
+        print(f"🎬 Starting upload: {video_file.filename}")
+        print(f"📝 Caption: {caption}")
+        print(f"🔐 Privacy: {privacy_level}")
         
         # Save temporary file
         import tempfile
@@ -264,48 +294,66 @@ def api_upload_video():
             video_file.save(temp_file.name)
             temp_path = temp_file.name
         
-        print(f"🎬 Starting video upload: {video_file.filename}")
-        print(f"📝 Caption: {caption}")
-        print(f"🔐 Privacy: {privacy_level}")
-        
-        # Upload to TikTok
-        upload_result = tiktok_api.upload_video(
-            access_token=access_token,
-            video_path=temp_path,
-            caption=caption,
-            privacy_level=privacy_level,
-            allow_duet=allow_duet,
-            allow_stitch=allow_stitch
-        )
-        
-        # Clean up temp file
         try:
-            os.unlink(temp_path)
-        except:
-            pass
-        
-        print(f"📤 Upload result: {upload_result}")
-        
-        if 'data' in upload_result and 'publish_id' in upload_result['data']:
-            return jsonify({
-                'success': True,
-                'video_id': upload_result['data'].get('publish_id'),
-                'status': 'uploaded',
-                'message': 'Video successfully uploaded to TikTok!',
-                'details': upload_result
-            })
-        else:
-            return jsonify({
-                'success': False,
-                'error': 'Upload failed',
-                'details': upload_result
-            })
+            # Upload to TikTok
+            upload_result = tiktok_api.upload_video(
+                access_token=access_token,
+                video_path=temp_path,
+                caption=caption,
+                privacy_level=privacy_level,
+                category=category,
+                allow_duet=allow_duet,
+                allow_stitch=allow_stitch
+            )
+            
+            print(f"📤 Upload result type: {type(upload_result)}")
+            print(f"📤 Upload result: {upload_result}")
+            
+            # Handle different response formats
+            if isinstance(upload_result, dict):
+                if 'data' in upload_result and 'publish_id' in upload_result['data']:
+                    return jsonify({
+                        'success': True,
+                        'video_id': upload_result['data'].get('publish_id'),
+                        'status': 'uploaded',
+                        'message': 'Video successfully uploaded to TikTok!',
+                        'details': upload_result
+                    })
+                elif 'error' in upload_result:
+                    return jsonify({
+                        'success': False,
+                        'error': upload_result.get('error', 'Upload failed'),
+                        'details': upload_result
+                    })
+                else:
+                    return jsonify({
+                        'success': True,
+                        'message': 'Upload completed (check details)',
+                        'details': upload_result
+                    })
+            else:
+                return jsonify({
+                    'success': False,
+                    'error': f'Unexpected response type: {type(upload_result)}',
+                    'details': str(upload_result)[:500]
+                })
+                
+        finally:
+            # Clean up temp file
+            try:
+                os.unlink(temp_path)
+            except:
+                pass
             
     except Exception as e:
         print(f"❌ Upload error: {e}")
+        import traceback
+        traceback.print_exc()
+        
         return jsonify({
             'success': False,
-            'error': f'Upload failed: {str(e)}'
+            'error': f'Upload failed: {str(e)}',
+            'traceback': traceback.format_exc()
         })
         
 # Add this at the top of your upload_video_page function (after authentication check):
@@ -667,7 +715,62 @@ def upload_video_page():
     </body>
     </html>
     """
-
+@app.route('/debug-upload')
+def debug_upload():
+    """Debug video upload capabilities"""
+    access_token = session.get('access_token')
+    
+    if not access_token:
+        return jsonify({'error': 'Not authenticated'})
+    
+    # Test if we can access video-related endpoints
+    headers = {
+        'Authorization': f'Bearer {access_token}',
+        'Content-Type': 'application/json'
+    }
+    
+    tests = {}
+    
+    # Test 1: Check video list endpoint (usually available in sandbox)
+    try:
+        list_url = "https://open.tiktokapis.com/v2/video/list/"
+        response = requests.get(list_url, headers=headers)
+        tests['video_list'] = {
+            'status': response.status_code,
+            'json': response.json() if response.status_code == 200 else response.text[:200]
+        }
+    except Exception as e:
+        tests['video_list'] = {'error': str(e)}
+    
+    # Test 2: Check upload endpoint availability
+    try:
+        upload_info_url = "https://open.tiktokapis.com/v2/video/upload/info/"
+        response = requests.get(upload_info_url, headers=headers)
+        tests['upload_info'] = {
+            'status': response.status_code,
+            'json': response.json() if response.status_code == 200 else response.text[:200]
+        }
+    except Exception as e:
+        tests['upload_info'] = {'error': str(e)}
+    
+    # Test 3: Check user permissions
+    try:
+        user_url = "https://open.tiktokapis.com/v2/user/info/"
+        response = requests.get(user_url, headers=headers)
+        user_data = response.json() if response.status_code == 200 else {}
+        tests['user_info'] = {
+            'status': response.status_code,
+            'scopes': user_data.get('data', {}).get('user', {}).get('scopes', [])
+        }
+    except Exception as e:
+        tests['user_info'] = {'error': str(e)}
+    
+    return jsonify({
+        'authenticated': True,
+        'access_token_short': access_token[:50] + '...',
+        'tests': tests,
+        'sandbox_info': 'Video upload might be limited in sandbox mode'
+    })
 @app.route('/sdk-auth')
 def sdk_auth():
     """Use TikTok's JavaScript SDK for authentication"""
@@ -850,6 +953,114 @@ def direct_auth_test():
     """
     
     return html
+@app.route('/test-minimal-upload')
+def test_minimal_upload():
+    """Test minimal video upload with a small test video"""
+    access_token = session.get('access_token')
+    
+    if not access_token:
+        return redirect('/')
+    
+    return """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Test Minimal Upload</title>
+        <style>
+            body { font-family: Arial; margin: 40px; }
+            .btn { padding: 15px 30px; background: #28a745; color: white; text-decoration: none; border-radius: 8px; }
+        </style>
+    </head>
+    <body>
+        <h1>🧪 Test Minimal Upload</h1>
+        <p>Testing with a very small video file...</p>
+        
+        <button onclick="testUpload()" class="btn">🧪 Test Upload</button>
+        
+        <div id="result" style="margin-top: 20px;"></div>
+        
+        <script>
+            async function testUpload() {
+                const resultDiv = document.getElementById('result');
+                resultDiv.innerHTML = '<p>🔄 Testing upload...</p>';
+                
+                try {
+                    // Create a minimal test video (1 second black video)
+                    const canvas = document.createElement('canvas');
+                    canvas.width = 640;
+                    canvas.height = 360;
+                    const ctx = canvas.getContext('2d');
+                    ctx.fillStyle = 'black';
+                    ctx.fillRect(0, 0, 640, 360);
+                    
+                    // Convert to blob
+                    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'video/webm'));
+                    
+                    const formData = new FormData();
+                    formData.append('video', blob, 'test.webm');
+                    formData.append('caption', 'Test video from Quran TikTok Uploader');
+                    formData.append('privacy_level', 'PRIVATE');
+                    
+                    const response = await fetch('/api/upload-test', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    const data = await response.json();
+                    
+                    resultDiv.innerHTML = `
+                        <div style="background: #d4edda; padding: 20px; border-radius: 8px;">
+                            <h3>✅ Test Complete</h3>
+                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                        </div>
+                    `;
+                    
+                } catch (error) {
+                    resultDiv.innerHTML = `
+                        <div style="background: #f8d7da; padding: 20px; border-radius: 8px;">
+                            <h3>❌ Test Failed</h3>
+                            <p>Error: ${error.message}</p>
+                        </div>
+                    `;
+                }
+            }
+        </script>
+    </body>
+    </html>
+    """
+
+@app.route('/api/upload-test', methods=['POST'])
+def api_upload_test():
+    """Test upload endpoint with minimal data"""
+    try:
+        access_token = session.get('access_token')
+        if not access_token:
+            return jsonify({'success': False, 'error': 'Not authenticated'})
+        
+        # Just test if the endpoint responds
+        headers = {
+            'Authorization': f'Bearer {access_token}',
+        }
+        
+        test_url = "https://open.tiktokapis.com/v2/video/publish/"
+        
+        # Send a minimal request
+        response = requests.post(test_url, headers=headers, data={'test': 'true'})
+        
+        return jsonify({
+            'success': True,
+            'test': 'completed',
+            'status_code': response.status_code,
+            'response_headers': dict(response.headers),
+            'response_text_preview': response.text[:200] if response.text else 'Empty response'
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'type': type(e).__name__
+        })
 @app.route('/minimal-auth')
 def minimal_auth():
     """Minimal authentication without PKCE - just basic parameters"""
