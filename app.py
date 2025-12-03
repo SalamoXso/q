@@ -148,11 +148,12 @@ def home():
     # Add upload button to the authenticated section
     upload_button = ''
     if authenticated:
+        # In your home route, replace the test upload link with:
         upload_button = '''
         <div class="card">
             <h2>🎬 Ready to Upload</h2>
             <p>Your TikTok account is connected and ready for video uploads.</p>
-            <a href="/upload-video" class="btn" style="background: #28a745;">🎬 Upload Video</a>
+            <a href="/upload-video" class="btn" style="background: #28a745;">🎬 Upload Video Now</a>
             <a href="/status" class="btn btn-secondary">📡 Check API Status</a>
         </div>
         '''
@@ -197,12 +198,13 @@ def home():
                 </div>
                 '''}
 
-                <div class="card">
-                    <h2>📋 Quick Actions</h2>
-                    <a href="/upload-video" class="btn {'btn-secondary' if not authenticated else ''}">🎬 Upload Video</a>
-                    <a href="/status" class="btn btn-secondary">📡 API Status</a>
-                    <a href="/debug" class="btn btn-secondary">🐛 Debug</a>
-                </div>
+                
+                    <div class="card">
+                        <h2>📋 Quick Actions</h2>
+                        <a href="/upload-video" class="btn {'btn-secondary' if not authenticated else ''}">🎬 Upload Video</a>
+                        <a href="/status" class="btn btn-secondary">📡 API Status</a>
+                        <a href="/debug" class="btn btn-secondary">🐛 Debug</a>
+                    </div>
             </div>
         </body>
     </html>
@@ -306,6 +308,7 @@ def api_upload_video():
             'error': f'Upload failed: {str(e)}'
         })
         
+# Add this at the top of your upload_video_page function (after authentication check):
 @app.route('/upload-video')
 def upload_video_page():
     """Video upload interface"""
@@ -313,152 +316,46 @@ def upload_video_page():
     if not access_token:
         return redirect('/')
     
-    return """
+    # Check if we're in sandbox mode
+    sandbox_warning = ""
+    if not IS_RENDER:  # Or check your specific sandbox condition
+        sandbox_warning = """
+        <div style="background: #fff3cd; color: #856404; padding: 15px; border-radius: 8px; margin: 20px 0;">
+            <h3>⚠️ Sandbox Mode</h3>
+            <p>You are currently in <strong>TikTok Sandbox mode</strong>. In sandbox:</p>
+            <ul>
+                <li>Video uploads might be simulated</li>
+                <li>Uploads won't appear on your public profile</li>
+                <li>Perfect for testing without affecting your account</li>
+                <li>Use small test videos (under 50MB)</li>
+            </ul>
+            <p><strong>Test Account:</strong> thereisonly1godallah1</p>
+        </div>
+        """
+    
+    return f"""
     <!DOCTYPE html>
     <html>
     <head>
         <title>Upload Video to TikTok</title>
         <style>
-            body { font-family: Arial, sans-serif; margin: 40px; }
-            .container { max-width: 600px; margin: 0 auto; }
-            .card { background: #f9f9f9; padding: 25px; border-radius: 12px; margin: 20px 0; }
-            .form-group { margin: 15px 0; }
-            label { display: block; margin-bottom: 5px; font-weight: bold; }
-            input, textarea, select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; }
-            button { padding: 12px 30px; background: #FF0050; color: white; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; }
-            .progress { display: none; background: #e9ecef; border-radius: 5px; margin: 10px 0; }
-            .progress-bar { background: #28a745; height: 20px; border-radius: 5px; width: 0%; transition: width 0.3s; }
+            body {{ font-family: Arial, sans-serif; margin: 40px; }}
+            .container {{ max-width: 600px; margin: 0 auto; }}
+            .card {{ background: #f9f9f9; padding: 25px; border-radius: 12px; margin: 20px 0; }}
+            /* ... rest of your CSS ... */
         </style>
     </head>
     <body>
         <div class="container">
             <h1>🎬 Upload Video to TikTok</h1>
             
+            {sandbox_warning}
+            
             <div class="card">
                 <h2>Video Details</h2>
-                <form id="uploadForm" enctype="multipart/form-data">
-                    <div class="form-group">
-                        <label for="video">Select Video File:</label>
-                        <input type="file" id="video" name="video" accept="video/*" required>
-                        <small>Supported formats: MP4, MOV, AVI (Max 500MB)</small>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="caption">Caption:</label>
-                        <textarea id="caption" name="caption" rows="3" placeholder="Enter your video caption with hashtags..."></textarea>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="privacy">Privacy Setting:</label>
-                        <select id="privacy" name="privacy">
-                            <option value="PUBLIC">Public</option>
-                            <option value="FRIENDS">Friends Only</option>
-                            <option value="PRIVATE">Private</option>
-                        </select>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="allow_duet">Allow Duet:</label>
-                        <select id="allow_duet" name="allow_duet">
-                            <option value="true">Yes</option>
-                            <option value="false">No</option>
-                        </select>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="allow_stitch">Allow Stitch:</label>
-                        <select id="allow_stitch" name="allow_stitch">
-                            <option value="true">Yes</option>
-                            <option value="false">No</option>
-                        </select>
-                    </div>
-                    
-                    <button type="submit">🚀 Upload to TikTok</button>
-                </form>
-                
-                <div class="progress" id="progressBar">
-                    <div class="progress-bar" id="progressFill"></div>
-                </div>
-                
-                <div id="result" style="margin-top: 20px;"></div>
-            </div>
-            
-            <div style="text-align: center; margin-top: 20px;">
-                <a href="/">← Back to Dashboard</a>
+                <!-- ... rest of your form ... -->
             </div>
         </div>
-
-        <script>
-            document.getElementById('uploadForm').addEventListener('submit', async function(e) {
-                e.preventDefault();
-                
-                const formData = new FormData();
-                const videoFile = document.getElementById('video').files[0];
-                const caption = document.getElementById('caption').value;
-                const privacy = document.getElementById('privacy').value;
-                const allowDuet = document.getElementById('allow_duet').value;
-                const allowStitch = document.getElementById('allow_stitch').value;
-                
-                // Show progress bar
-                const progressBar = document.getElementById('progressBar');
-                const progressFill = document.getElementById('progressFill');
-                const resultDiv = document.getElementById('result');
-                
-                progressBar.style.display = 'block';
-                resultDiv.innerHTML = '<p>🔄 Preparing upload...</p>';
-                
-                formData.append('video', videoFile);
-                formData.append('caption', caption);
-                formData.append('privacy_level', privacy);
-                formData.append('allow_duet', allowDuet);
-                formData.append('allow_stitch', allowStitch);
-                
-                try {
-                    const response = await fetch('/api/upload', {
-                        method: 'POST',
-                        body: formData
-                    });
-                    
-                    const data = await response.json();
-                    
-                    if (data.success) {
-                        progressFill.style.width = '100%';
-                        resultDiv.innerHTML = `
-                            <div style="background: #d4edda; color: #155724; padding: 15px; border-radius: 5px;">
-                                <h3>✅ Upload Successful!</h3>
-                                <p><strong>Video ID:</strong> ${data.video_id || 'N/A'}</p>
-                                <p><strong>Status:</strong> ${data.status || 'Uploaded'}</p>
-                                <p><strong>Message:</strong> ${data.message}</p>
-                            </div>
-                        `;
-                    } else {
-                        resultDiv.innerHTML = `
-                            <div style="background: #f8d7da; color: #721c24; padding: 15px; border-radius: 5px;">
-                                <h3>❌ Upload Failed</h3>
-                                <p><strong>Error:</strong> ${data.error}</p>
-                                <p><strong>Details:</strong> ${JSON.stringify(data.details || {})}</p>
-                            </div>
-                        `;
-                    }
-                } catch (error) {
-                    resultDiv.innerHTML = `
-                        <div style="background: #f8d7da; color: #721c24; padding: 15px; border-radius: 5px;">
-                            <h3>❌ Upload Error</h3>
-                            <p><strong>Error:</strong> ${error.message}</p>
-                        </div>
-                    `;
-                }
-            });
-            
-            // Simulate progress for large files
-            document.getElementById('video').addEventListener('change', function(e) {
-                const file = e.target.files[0];
-                if (file) {
-                    const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
-                    document.getElementById('result').innerHTML = `<p>📁 Selected file: ${file.name} (${fileSizeMB} MB)</p>`;
-                }
-            });
-        </script>
     </body>
     </html>
     """
@@ -1214,28 +1111,9 @@ def test_upload():
     """Test upload page"""
     access_token = session.get('access_token')
     if not access_token:
-        return redirect('/auth')
+        return redirect('/upload-video')
     
-    return """
-    <html>
-        <head>
-            <title>Test Upload - Quran TikTok</title>
-            <style>
-                body { font-family: Arial; margin: 40px; }
-                .card { background: #f9f9f9; padding: 20px; border-radius: 8px; margin: 20px 0; }
-            </style>
-        </head>
-        <body>
-            <h1>🎬 Test Video Upload</h1>
-            <div class="card">
-                <h2>Sandbox Upload Testing</h2>
-                <p>In sandbox mode, video upload functionality might be limited or simulated.</p>
-                <p><strong>Note:</strong> Full upload functionality will be available when we move to production.</p>
-            </div>
-            <p><a href="/">← Back to Dashboard</a></p>
-        </body>
-    </html>
-    """
+    return redirect('/upload-video')
 
 @app.route('/clear-session')
 def clear_session():
