@@ -170,7 +170,7 @@ tiktok_api = TikTokAPI()
 @app.route('/')
 def home():
     """Main dashboard"""
-    environment = "Sandbox" if IS_RENDER else "Sandbox (Local Testing)"
+    environment = "Production" if IS_RENDER else "Sandbox (Local Testing)"
     access_token = session.get('access_token')
     authenticated = bool(access_token)
     
@@ -1541,7 +1541,36 @@ def test_upload():
         return redirect('/upload-video')
     
     return redirect('/upload-video')
-
+def get_auth_url(self):
+    """Generate TikTok OAuth URL with PKCE"""
+    try:
+        # Generate PKCE code verifier and challenge
+        code_verifier = generate_code_verifier()
+        code_challenge = generate_code_challenge(code_verifier)
+        
+        # Store code_verifier in session for later use
+        session['code_verifier'] = code_verifier
+        
+        # Make sure redirect_uri is properly URL-encoded
+        from urllib.parse import quote
+        encoded_redirect_uri = quote(self.redirect_uri, safe='')
+        
+        auth_url = (
+            f"https://www.tiktok.com/v2/auth/authorize/"
+            f"?client_key={self.client_key}"
+            "&scope=user.info.basic,video.upload,video.list"
+            "&response_type=code"
+            f"&redirect_uri={encoded_redirect_uri}"
+            f"&code_challenge={code_challenge}"
+            "&code_challenge_method=S256"
+            "&state=tiktok_auth_quran_app"
+        )
+        print(f"🔗 Generated Auth URL (truncated): {auth_url[:200]}...")
+        return auth_url
+    except Exception as e:
+        print(f"❌ Error generating auth URL: {e}")
+        raise e
+    
 @app.route('/clear-session')
 def clear_session():
     """Clear session data (for testing)"""
