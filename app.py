@@ -199,7 +199,12 @@ def upload_file():
             <input type="submit" value="Upload">
         </form>
     """)
-
+@app.route('/<filename>')
+def serve_verification(filename):
+    if filename.startswith("tiktok") and filename.endswith(".txt"):
+        if os.path.exists(filename):
+            return send_file(filename)
+    abort(404)
 @app.route('/')
 def home():
     """Main dashboard"""
