@@ -1,6 +1,6 @@
 # app.py - Complete version with SDK authentication and fallbacks
 from flask import send_from_directory
-
+from flask import request, render_template_string, send_file, abort
 from flask import Flask, render_template, request, jsonify, redirect, session
 import json
 import os
@@ -175,6 +175,30 @@ tiktok_api = TikTokAPI()
 def tiktok_verify():
     return send_from_directory('static', 'tiktok-verify-123456.txt')
 
+# Upload route
+@app.route('/upload', methods=['GET', 'POST'])
+def upload_file():
+    if request.method == 'POST':
+        if 'file' not in request.files:
+            return "No file part", 400
+        file = request.files['file']
+        if file.filename == '':
+            return "No selected file", 400
+        if file and file.filename.endswith(".txt"):
+            save_path = os.path.join(os.getcwd(), file.filename)  # Save to project root
+            file.save(save_path)
+            return f"File uploaded successfully: {file.filename}"
+        else:
+            return "Only .txt files are allowed", 400
+
+    # Simple HTML upload form
+    return render_template_string("""
+        <h1>Upload TikTok Verification File</h1>
+        <form method="post" enctype="multipart/form-data">
+            <input type="file" name="file" accept=".txt">
+            <input type="submit" value="Upload">
+        </form>
+    """)
 
 @app.route('/')
 def home():
