@@ -7,7 +7,9 @@ import hashlib
 import base64
 import secrets
 from config import Config
-
+# Add this at the top with other imports
+from datetime import datetime
+import time  # Alternative to datetime
 app = Flask(__name__)
 app.secret_key = 'your-secret-key-123-change-in-production-for-tiktok-sandbox'
 
@@ -241,12 +243,52 @@ def home():
 
 @app.route('/auth')
 def authenticate():
-    """Original OAuth (currently broken due to TikTok JS issues)"""
+    """Original OAuth with CSP fix"""
     try:
         print("🔄 Starting OAuth flow...")
         auth_url = tiktok_api.get_auth_url()
-        print(f"🔗 Redirecting to: {auth_url}")
-        return redirect(auth_url)
+        print(f"🔗 Redirecting to: {auth_url[:200]}...")
+        
+        return f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Redirecting to TikTok...</title>
+            <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:;">
+            <meta name="referrer" content="no-referrer">
+            <script>
+                // Open in popup window to isolate from parent page CSP
+                function openTikTokAuth() {{
+                    const width = 600;
+                    const height = 700;
+                    const left = window.screen.width / 2 - width / 2;
+                    const top = window.screen.height / 2 - height / 2;
+                    
+                    const popup = window.open(
+                        "{auth_url}",
+                        "tiktok_auth",
+                        `width=${{width}},height=${{height}},left=${{left}},top=${{top}},resizable=yes,scrollbars=yes,status=yes`
+                    );
+                    
+                    // Check for completion every second
+                    const checkPopup = setInterval(() => {{
+                        if (popup.closed) {{
+                            clearInterval(checkPopup);
+                            window.location.href = "/auth-check";
+                        }}
+                    }}, 1000);
+                }}
+                
+                document.addEventListener('DOMContentLoaded', openTikTokAuth);
+            </script>
+        </head>
+        <body style="font-family: Arial; margin: 40px; text-align: center;">
+            <h2>🔄 Opening TikTok Authentication...</h2>
+            <p>If popup is blocked, <a href="{auth_url}" target="_blank">click here</a></p>
+            <div id="status">Opening authentication window...</div>
+        </body>
+        </html>
+        """
     except Exception as e:
         error_msg = f"Error generating auth URL: {str(e)}"
         print(f"❌ {error_msg}")
@@ -259,6 +301,50 @@ def authenticate():
                 </div>
                 <p><a href="/">← Back to Home</a></p>
             </body>
+        </html>
+        """
+
+@app.route('/auth-check')
+def auth_check():
+    """Check if authentication was completed"""
+    access_token = session.get('access_token')
+    
+    if access_token:
+        return """
+        <html>
+        <head>
+            <title>✅ Authentication Complete</title>
+            <style>
+                body { font-family: Arial; margin: 40px; text-align: center; }
+                .success { background: #d4edda; color: #155724; padding: 20px; border-radius: 8px; }
+            </style>
+        </head>
+        <body>
+            <div class="success">
+                <h1>✅ Authentication Successful!</h1>
+                <p>Your TikTok account has been connected.</p>
+                <p><a href="/">Go to Dashboard</a></p>
+            </div>
+        </body>
+        </html>
+        """
+    else:
+        return """
+        <html>
+        <head>
+            <title>❌ Authentication Failed</title>
+            <style>
+                body { font-family: Arial; margin: 40px; text-align: center; }
+                .error { background: #f8d7da; color: #721c24; padding: 20px; border-radius: 8px; }
+            </style>
+        </head>
+        <body>
+            <div class="error">
+                <h1>❌ Authentication Failed</h1>
+                <p>The authentication process did not complete successfully.</p>
+                <p><a href="/auth">Try Again</a> | <a href="/">Back to Home</a></p>
+            </div>
+        </body>
         </html>
         """
 # Add this to your app.py to verify production setup
@@ -1514,7 +1600,195 @@ def api_status():
             'message': 'Error connecting to TikTok API',
             'environment': 'Sandbox' if not IS_RENDER else 'Production'
         })
-
+@app.route('/callback')
+def callback():
+    """Handle TikTok OAuth callback"""
+    print("✅ Callback route hit!")
+    print(f"📥 Request URL: {request.url}")
+    print(f"📥 Query params: {dict(request.args)}")
+    
+    # Get authorization code from query parameters
+    code = request.args.get('code')
+    error = request.args.get('error')
+    
+    if error:
+        error_description = request.args.get('error_description', 'Unknown error')
+        return f"""
+        <html>
+        <body style="font-family: Arial; margin: 40px;">
+            <h1>❌ Authentication Failed</h1>
+            <div style="background: #f8d7da; padding: 20px; border-radius: 8px;">
+                <p><strong>Error:</strong> {error}</p>
+                <p><strong>Description:</strong> {error_description}</p>
+            </div>
+            <p><a href="/">← Back to Home</a></p>
+        </body>
+        </html>
+        """
+    
+    if not code:
+        return "❌ Error: No authorization code received", 400
+    
+    print(f"✅ Received authorization code: {code[:50]}...")
+    
+    try:
+        # Store code in session for debugging
+        session['auth_code'] = code
+        
+        # Exchange code for access token (simplified for testing)
+        token_url = "https://open.tiktokapis.com/v2/oauth/token/"
+        
+        payload = {
+            'client_key': Config.CLIENT_KEY,
+            'client_secret': Config.CLIENT_SECRET,
+            'code': code,
+            'grant_type': 'authorization_code',
+            'redirect_uri': Config.REDIRECT_URI
+        }
+        
+        headers = {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Cache-Control': 'no-cache'
+        }
+        
+        print(f"📤 Making token request...")
+        response = requests.post(token_url, data=payload, headers=headers)
+        
+        print(f"📥 Token response status: {response.status_code}")
+        print(f"📥 Response: {response.text[:500]}")
+        
+        if response.status_code == 200:
+            token_data = response.json()
+            
+            if 'access_token' in token_data:
+                # Store token in session
+                session['access_token'] = token_data['access_token']
+                session['refresh_token'] = token_data.get('refresh_token')
+                session['expires_in'] = token_data.get('expires_in')
+                
+                print(f"✅ Successfully obtained access token!")
+                
+                return f"""
+                <html>
+                <head>
+                    <title>✅ TikTok Connected!</title>
+                    <style>
+                        body {{
+                            font-family: Arial, sans-serif;
+                            margin: 40px;
+                            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                            color: white;
+                            text-align: center;
+                        }}
+                        .success-card {{
+                            background: rgba(255, 255, 255, 0.95);
+                            color: #333;
+                            padding: 40px;
+                            border-radius: 20px;
+                            margin: 50px auto;
+                            max-width: 600px;
+                            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+                        }}
+                        .btn {{
+                            display: inline-block;
+                            padding: 15px 30px;
+                            background: #FF0050;
+                            color: white;
+                            text-decoration: none;
+                            border-radius: 10px;
+                            font-weight: bold;
+                            margin: 20px 10px;
+                            transition: transform 0.2s;
+                        }}
+                        .btn:hover {{
+                            transform: translateY(-2px);
+                            background: #e00040;
+                        }}
+                    </style>
+                </head>
+                <body>
+                    <div class="success-card">
+                        <h1 style="color: #28a745; font-size: 2.5em;">🎉 Success!</h1>
+                        <p style="font-size: 1.2em;">Your TikTok account has been successfully connected!</p>
+                        
+                        <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; margin: 30px 0;">
+                            <h3>📊 Connection Details:</h3>
+                            <p><strong>Access Token:</strong> {token_data['access_token'][:30]}...</p>
+                            <p><strong>Expires in:</strong> {token_data.get('expires_in', 'Unknown')} seconds</p>
+                            <p><strong>Scope:</strong> {token_data.get('scope', 'Not specified')}</p>
+                        </div>
+                        
+                        <div>
+                            <a href="/" class="btn">🚀 Go to Dashboard</a>
+                            <a href="/upload-video" class="btn" style="background: #28a745;">🎬 Upload Video</a>
+                        </div>
+                        
+                        <p style="margin-top: 30px; color: #666; font-size: 0.9em;">
+                            You can now upload Quran videos directly to TikTok!
+                        </p>
+                    </div>
+                    
+                    <script>
+                        // Auto-redirect after 5 seconds
+                        setTimeout(function() {{
+                            window.location.href = '/';
+                        }}, 5000);
+                    </script>
+                </body>
+                </html>
+                """
+            else:
+                return f"""
+                <html>
+                <body style="font-family: Arial; margin: 40px;">
+                    <h1>❌ Token Error</h1>
+                    <div style="background: #fff3cd; padding: 20px; border-radius: 8px;">
+                        <p>No access_token in response:</p>
+                        <pre>{json.dumps(token_data, indent=2)}</pre>
+                    </div>
+                    <p><a href="/">← Back to Home</a></p>
+                </body>
+                </html>
+                """
+        else:
+            return f"""
+            <html>
+            <body style="font-family: Arial; margin: 40px;">
+                <h1>❌ Token Exchange Failed</h1>
+                <div style="background: #f8d7da; padding: 20px; border-radius: 8px;">
+                    <p><strong>Status Code:</strong> {response.status_code}</p>
+                    <p><strong>Response:</strong></p>
+                    <pre>{response.text}</pre>
+                </div>
+                <p><a href="/">← Back to Home</a></p>
+            </body>
+            </html>
+            """
+            
+    except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"❌ Exception in callback: {error_details}")
+        
+        return f"""
+        <html>
+        <body style="font-family: Arial; margin: 40px;">
+            <h1>❌ Server Error</h1>
+            <div style="background: #f8d7da; padding: 20px; border-radius: 8px;">
+                <p><strong>Error:</strong> {str(e)}</p>
+                <pre>{error_details}</pre>
+            </div>
+            <p><a href="/">← Back to Home</a></p>
+        </body>
+        </html>
+        """        
+@app.route('/test')
+def test():
+    return jsonify({
+        'status': 'online',
+        'app': 'q-hszm.onrender.com',
+        'timestamp': datetime.now().isoformat()
+    })
 @app.route('/debug')
 def debug_config():
     """Debug page to check configuration"""
