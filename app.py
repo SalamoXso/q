@@ -1,4 +1,6 @@
 # app.py - Complete version with SDK authentication and fallbacks
+from flask import send_from_directory
+
 from flask import Flask, render_template, request, jsonify, redirect, session
 import json
 import os
@@ -167,6 +169,11 @@ class TikTokAPI:
 
 # Initialize TikTok API
 tiktok_api = TikTokAPI()
+
+
+@app.route('/tiktok-verify-123456.txt')
+def tiktok_verify():
+    return send_from_directory('static', 'tiktok-verify-123456.txt')
 
 
 @app.route('/')
