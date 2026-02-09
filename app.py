@@ -1844,7 +1844,58 @@ def get_auth_url(self):
     except Exception as e:
         print(f"❌ Error generating auth URL: {e}")
         raise e
-    
+# Terms of Service
+@app.route('/terms')
+def terms_of_service():
+    terms_text = """
+    <h1>Terms of Service</h1>
+    <p>Last updated: February 9, 2026</p>
+    <p>Welcome to the Quran Auto Uploader ("we", "our", "the App"). By accessing or using our app, you agree to comply with these Terms of Service.</p>
+    <h2>1. Use of the App</h2>
+    <p>The App automatically uploads Qur'an recitation videos to TikTok. You must use the App in compliance with all applicable laws, regulations, and TikTok's Terms of Service.</p>
+    <h2>2. Account Requirements</h2>
+    <p>You must have a valid TikTok account to use the App. You are responsible for maintaining the confidentiality of your TikTok credentials and for all activities that occur under your account.</p>
+    <h2>3. Prohibited Actions</h2>
+    <p>You agree not to use the App to upload content that violates TikTok policies, copyright laws, or any applicable laws. The App must not be used for spam, harassment, or illegal activities.</p>
+    <h2>4. Limitation of Liability</h2>
+    <p>We provide the App "as-is" and make no warranties regarding its availability, accuracy, or results. We are not liable for any damages arising from your use of the App.</p>
+    <h2>5. Changes to Terms</h2>
+    <p>We may update these Terms of Service at any time. Continued use of the App constitutes acceptance of the updated terms.</p>
+    <h2>6. Contact</h2>
+    <p>If you have questions, contact us at <a href="mailto:contact@yourwebsite.com">contact@yourwebsite.com</a>.</p>
+    """
+    return render_template_string(terms_text)
+
+# Privacy Policy
+@app.route('/privacy')
+def privacy_policy():
+    privacy_text = """
+    <h1>Privacy Policy</h1>
+    <p>Last updated: February 9, 2026</p>
+    <p>Your privacy is important to us. This Privacy Policy explains how we collect, use, and protect information when you use the Quran Auto Uploader ("App").</p>
+    <h2>1. Information We Collect</h2>
+    <p>We collect minimal information necessary to upload videos to TikTok, including:</p>
+    <ul>
+        <li>TikTok account information (via Login Kit)</li>
+        <li>Access tokens required for posting videos (never shared with third parties)</li>
+    </ul>
+    <h2>2. How We Use Information</h2>
+    <p>Your information is used solely to:</p>
+    <ul>
+        <li>Authenticate your TikTok account</li>
+        <li>Automatically post Qur'an recitation videos to your account</li>
+        <li>Improve app functionality and performance</li>
+    </ul>
+    <h2>3. Data Sharing</h2>
+    <p>We do not sell or share your personal information with third parties. We may share data if required by law or to comply with TikTok's policies.</p>
+    <h2>4. Security</h2>
+    <p>We take reasonable measures to protect your information. However, no system is completely secure.</p>
+    <h2>5. Changes to Privacy Policy</h2>
+    <p>We may update this Privacy Policy at any time. Continued use of the App constitutes acceptance of the updated policy.</p>
+    <h2>6. Contact</h2>
+    <p>For privacy inquiries, contact us at <a href="mailto:contact@yourwebsite.com">contact@yourwebsite.com</a>.</p>
+    """
+    return render_template_string(privacy_text)    
 @app.route('/clear-session')
 def clear_session():
     """Clear session data (for testing)"""
