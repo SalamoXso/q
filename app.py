@@ -170,7 +170,7 @@ tiktok_api = TikTokAPI()
 @app.route('/')
 def home():
     """Main dashboard"""
-    environment = "Production" if IS_RENDER else "Sandbox (Local Testing)"
+    environment = "Sandbox" if IS_RENDER else "Sandbox (Local Testing)"
     access_token = session.get('access_token')
     authenticated = bool(access_token)
     
